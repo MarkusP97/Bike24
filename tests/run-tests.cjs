@@ -14,6 +14,7 @@ try { pw = require('playwright'); } catch (e) { pw = require(path.join(execSync(
 
 const ROOT = path.join(__dirname, '..');
 const SRC = fs.readFileSync(path.join(ROOT, 'bike24-payment-debugger.js'), 'utf8');
+const INJ = fs.readFileSync(path.join(ROOT, 'bike24-rechnung-test.user.js'), 'utf8');
 const USER = fs.readFileSync(path.join(ROOT, 'bike24-payment-debugger.user.js'), 'utf8');
 const NM = path.join(__dirname, 'node_modules');
 const DL = path.join(__dirname, 'downloads');
@@ -68,7 +69,7 @@ const codeTxt = e => (e?.code || []).map(c => `${c.aufruf} @ ${c.wo}`).join(' | 
   const BASE = `http://127.0.0.1:${server.address().port}`;
   const browser = await pw.chromium.launch();
 
-  async function open(fixture, { mode = 'early', context, query = '', wait = 1500, late = 150, pre } = {}) {
+  async function open(fixture, { mode = 'early', context, query = '', wait = 1500, late = 150, pre, post } = {}) {
     const ctx = context || await browser.newContext({ acceptDownloads: true });
     const page = await ctx.newPage(); const logs = []; const errors = [];
     page.on('console', m => logs.push({ type: m.type(), text: m.text() }));
@@ -76,6 +77,7 @@ const codeTxt = e => (e?.code || []).map(c => `${c.aufruf} @ ${c.wo}`).join(' | 
     if (pre) await page.addInitScript(pre);
     if (mode === 'early') await page.addInitScript(SRC);
     if (mode === 'auto') await page.addInitScript(USER);
+    if (post) await page.addInitScript(post);   // läuft NACH dem Debugger (wie ein später installiertes Userscript)
     await page.goto(`${BASE}/${fixture.includes('/') ? fixture : 'fixtures/' + fixture}${query}`);
     if (mode === 'late') { await page.waitForTimeout(late); await page.evaluate(SRC); }
     await page.waitForTimeout(wait);
@@ -393,6 +395,43 @@ const codeTxt = e => (e?.code || []).map(c => `${c.aufruf} @ ${c.wo}`).join(' | 
     check(T, 'Mail nennt „Entscheidung fällt auf dem Server“', /Entscheidung fällt auf dem Server.*Rechnung/.test(rep));
     check(T, 'Adresse mit \\u-Escapes vollständig geschwärzt', !/u00df|u00fc|rnberg|Muster|90402|"87"/.test(rep), (rep.match(/.{30}(u00df|u00fc|rnberg|Muster|90402).{10}/) || [''])[0]);
     await ctx.close();
+  }
+
+  // 24) Rechnung-Test-Interceptor: Standard AUS, AN schreibt „Rechnung“ zurück, Debugger sieht das Original
+  {
+    const T = 'Rechnung-Test (Interceptor)';
+    const off = await open('bike24like.html', { mode: 'auto', post: INJ });
+    check(T, 'Standard AUS: Rechnung verschwindet wie bisher', badOf(off.data).some(x => x.zahlungsart === 'Rechnung'));
+    check(T, 'Standard AUS: nichts verändert', await off.page.evaluate(() => __b24Inject.log.length === 0 && !__b24Inject.enabled));
+    await off.ctx.close();
+
+    const on = await open('bike24like.html', { mode: 'auto', post: `localStorage.setItem('b24RechnungTest','1');\n` + INJ });
+    check(T, 'Konsole: „Payment-Methods verändert: Rechnung hinzugefügt“', on.logs.some(l => /Payment-Methods verändert: Rechnung hinzugefügt/.test(l.text)), on.logs.map(l => l.text).join(' // ').slice(0, 300));
+    const inj = await on.page.evaluate(() => __b24Inject.log);
+    check(T, 'Log: vorher ohne, nachher mit Rechnung (an erster Stelle)', inj.length === 1 && !inj[0].vorher.includes('Rechnung') && inj[0].nachher[0] === 'Rechnung', JSON.stringify(inj));
+    check(T, 'Nur payment-methods verändert, übrige Einträge unverändert', inj[0]?.nachher.slice(1).join() === inj[0]?.vorher.join());
+    check(T, 'Seite zeigt „Rechnung“ jetzt (Eintrag bleibt im DOM)', await on.page.evaluate(() => !!document.getElementById('payment-method-item-5')));
+    check(T, 'Debugger meldet KEIN Verschwinden (Eintrag blieb)', !badOf(on.data).some(x => x.zahlungsart === 'Rechnung'));
+    const [dl] = await Promise.all([on.page.waitForEvent('download'), on.page.evaluate(() => b24PayDbg.report())]);
+    const rep = fs.readFileSync(await dl.path(), 'utf8');
+    check(T, 'Bericht warnt: TESTLAUF + testEingriff im Anhang', /ACHTUNG – TESTLAUF/.test(rep) && /"testEingriff": \[\s*\{/.test(rep));
+    const pmNet = JSON.parse(rep.slice(rep.indexOf('{\n  "tool"'))).netzwerk.filter(n => /payment-methods\?multi/.test(n.url));
+    check(T, 'Debugger (innen) sah die ORIGINAL-Server-Liste ohne Rechnung', pmNet.length >= 1 && pmNet.every(n => !/Rechnung/.test(n.auszug)), JSON.stringify(pmNet).slice(0, 300));
+    check(T, 'roter Banner vorhanden, blockiert keine Klicks', await on.page.evaluate(() => { const h = [...document.documentElement.children].find(e => e.style.zIndex === '2147483647' && e.style.pointerEvents === 'none'); return !!h && h.getBoundingClientRect().height > 10; }));
+    check(T, 'keine Seitenfehler', on.errors.length === 0, on.errors.join('; '));
+    await on.ctx.close();
+
+    const g = await open('order-guard.html', { mode: 'auto', post: `localStorage.setItem('b24RechnungTest','1');\n` + INJ, wait: 300 });
+    await g.page.click('#next'); await g.page.click('#order'); await g.page.click('#order2');
+    const r = await g.page.evaluate(async () => {
+      const a = await fetch('/api/checkout/order', { method: 'POST' }), b = await fetch('/api/checkout/orders-process', { method: 'POST' });
+      const x = await new Promise(res => { const q = new XMLHttpRequest(); q.open('POST', '/api/checkout/place-order'); q.onerror = () => res('error'); q.onload = () => res('sent'); q.send(); });
+      return { next: !!window.__next, ordered: !!window.__ordered, ordered2: !!window.__ordered2, orderFetch: a.status, processFetch: b.status, xhr: x, blocked: __b24Inject.blocked.length };
+    });
+    check(T, 'Weiter-Button („Bestellübersicht“) funktioniert', r.next);
+    check(T, 'Finale Bestell-Buttons blockiert („Zahlungspflichtig bestellen“, „Jetzt kaufen“)', !r.ordered && !r.ordered2, JSON.stringify(r));
+    check(T, 'POST an Bestell-Endpunkt (fetch + XHR) blockiert, orders-process läuft normal', r.orderFetch === 499 && r.xhr === 'error' && r.processFetch === 404, JSON.stringify(r));
+    await g.ctx.close();
   }
 
   // 21) Strenge Content-Security-Policy + Trusted Types (Panel darf nicht kaputtgehen)

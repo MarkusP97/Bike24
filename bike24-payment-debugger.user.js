@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bike24 Zahlungsarten-Debugger
 // @namespace    https://github.com/MarkusP97/Bike24
-// @version      2.1.0
+// @version      2.2.0
 // @description  Zeigt im Bike24-Checkout, welche Zahlungsarten verschwinden – wann, wie und durch welchen Code – und erstellt einen Bericht für den Support. Sendet keine Daten.
 // @match        https://*.bike24.de/*
 // @match        https://*.bike24.com/*
@@ -79,7 +79,7 @@ window.B24_AUTO = true;   // Tampermonkey-Modus: still, bis auf der Seite Zahlun
     return;
   }
 
-  const VERSION = '2.1.0', LS = 'b24PayDbg.runs', MAX = 300, PANEL_ID = 'b24-dbg-panel', T0 = Date.now();
+  const VERSION = '2.2.0', LS = 'b24PayDbg.runs', MAX = 300, PANEL_ID = 'b24-dbg-panel', T0 = Date.now();
   const state = new Map();                                   // Schlüssel → beobachtete Zahlungsart
   const events = [], muts = [], calls = [], net = [], cssAdds = [], restore = [];
   const owner = new WeakMap(), claimed = new WeakSet(), proxies = new WeakMap(), xhrInfo = new WeakMap();
@@ -519,6 +519,7 @@ window.B24_AUTO = true;   // Tampermonkey-Modus: still, bis auf der Seite Zahlun
     const k = ctx(), cmp = compareData();
     return { tool: 'Bike24 Zahlungsarten-Debugger ' + VERSION, erstellt: new Date().toISOString(), seite: location.origin + location.pathname, browser: browserName(), kontext: k,
       zahlungsarten: [...state.values()].map(o => ({ name: o.name, sichtbar: o.vis && !o.gone, deaktiviert: o.dis, grund: reason(o), html: o.html })),
+      testEingriff: window.__b24Inject && window.__b24Inject.log ? window.__b24Inject.log.slice() : [],   // gesetzt vom Rechnung-Test-Skript
       ereignisse: events, vergleich: cmp.text, vergleichOk: cmp.ok,
       netzwerk: net.map(x => ({ methode: x.m, url: x.url, status: x.st, fertigMs: Math.round(x.end || 0), auszug: x.hit })) };
   }
@@ -527,6 +528,7 @@ window.B24_AUTO = true;   // Tampermonkey-Modus: still, bis auf der Seite Zahlun
     const weg = d.zahlungsarten.filter(z => !z.sichtbar || z.deaktiviert);
     const L = ['Betreff: Zahlungsarten verschwinden im Checkout bei mehreren Artikeln', '', 'Hallo Bike24-Team,', '',
       'in eurem Checkout verschwinden bei mir Zahlungsarten von der Zahlungsseite, sobald mehrere Artikel im Warenkorb liegen. Mit nur einem Artikel sind sie verfügbar. Ich habe das mit einem Analyse-Skript im Browser aufgezeichnet:', ''];
+    if (d.testEingriff && d.testEingriff.length) L.push('⚠️ ACHTUNG – TESTLAUF: In diesem Lauf wurden Server-Antworten lokal verändert (siehe „testEingriff“ im Anhang). Die Angaben unten beschreiben NICHT das normale Verhalten der Seite.', '');
     if (bad.length) {
       L.push(`• Betroffene Zahlungsarten: ${names.join(', ')}`);
       L.push(`• Zeitpunkt: ${bad[0].msNachSeitenaufruf} ms nach Aufruf der Seite (${new Date().toLocaleDateString('de-DE')}, ${bad[0].zeit} Uhr)`);
