@@ -1,0 +1,13 @@
+<!doctype html><html lang="de"><head><meta charset="utf-8"><title>Checkout-Testseite</title>
+<style>body{font-family:sans-serif} li{padding:6px;list-style:none} .is-hidden{display:none} [data-state=off]{display:none} .d-none{display:none!important}</style></head><body>
+<header>Logos: PayPal Klarna Visa Rechnung</header>
+<p>Gesamtsumme: 412,97 € · 3 Artikel</p>
+<div id="step">Lade Zahlungsarten…</div>
+<script>
+setTimeout(function renderPaymentStep() {
+  document.getElementById('step').innerHTML = '<ul>' + [['paypal','PayPal'],['invoice','Rechnung'],['prepayment','Vorkasse']]
+    .map(([v, n]) => '<li id="' + v + '"><label><input type="radio" name="paymentMethod" value="' + v + '"> ' + n + '</label></li>').join('') + '</ul>';
+  setTimeout(function hideInvoice() { document.getElementById('invoice').classList.add('is-hidden'); }, 500);
+}, 800);
+</script>
+<footer>Sichere Zahlung mit PayPal, Kauf auf Rechnung, Vorkasse, Kreditkarte</footer></body></html>

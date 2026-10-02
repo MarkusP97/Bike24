@@ -1,0 +1,18 @@
+<!doctype html><html lang="de"><head><meta charset="utf-8"><title>Checkout-Testseite</title>
+<style>body{font-family:sans-serif} li{padding:6px;list-style:none} .is-hidden{display:none} [data-state=off]{display:none} .d-none{display:none!important}</style></head><body>
+<header>Logos: PayPal Klarna Visa Rechnung</header>
+<p>Gesamtsumme: 412,97 € · 3 Artikel</p>
+<ul id="pm"></ul>
+<script>
+const ALL = [['paypal','PayPal'],['invoice','Rechnung'],['prepayment','Vorkasse'],['creditcard','Kreditkarte']];
+const html = list => list.map(([v, n]) => '<li><label><input type="radio" name="paymentMethod" value="' + v + '"> ' + n + '</label></li>').join('');
+const ul = document.getElementById('pm');
+ul.innerHTML = html(ALL);
+const gap = location.search.includes('gap');
+setTimeout(function rebuildList() {
+  const allowed = ALL.filter(([v]) => v !== 'invoice');
+  if (!gap) ul.innerHTML = html(allowed);                                       // in einem Rutsch neu aufgebaut
+  else { ul.replaceChildren(); setTimeout(() => { ul.innerHTML = html(allowed); }, 150); }   // erst leer, dann neu
+}, 500);
+</script>
+<footer>Sichere Zahlung mit PayPal, Kauf auf Rechnung, Vorkasse, Kreditkarte</footer></body></html>

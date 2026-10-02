@@ -1,0 +1,20 @@
+<!doctype html><html lang="de"><head><meta charset="utf-8"><title>Checkout-Testseite</title>
+<style>body{font-family:sans-serif} li{padding:6px;list-style:none} .is-hidden{display:none} [data-state=off]{display:none} .d-none{display:none!important}</style></head><body>
+<header>Logos: PayPal Klarna Visa Rechnung</header>
+<style id="s2">.pm{padding:10px;border:1px solid #ccc}</style>
+<p>Gesamtsumme: 412,97 € · 3 Artikel</p>
+<ul>
+ <li class="pm" id="pp"><label><input type="radio" name="paymentMethod" value="paypal"> PayPal</label></li>
+ <li class="pm pm-inv" id="inv"><label><input type="radio" name="paymentMethod" value="invoice"> Rechnung</label></li>
+ <li class="pm" id="cc"><label><input type="radio" name="paymentMethod" value="creditcard"> Kreditkarte</label></li>
+ <li class="pm" id="gp"><label><input type="radio" name="paymentMethod" value="giropay"> giropay</label></li>
+</ul>
+<script>
+setTimeout(function cssTricks() {
+  document.getElementById('s2').sheet.insertRule('.pm-inv{display:none}', 0);             // CSSOM: keine DOM-Änderung!
+  document.querySelector('#cc label').style.display = 'none';                             // nur die Beschriftung weg
+  const st = document.createElement('style'); st.textContent = '#gp{display:none}';
+  document.head.appendChild(st);                                                          // neues <style>
+}, 500);
+</script>
+<footer>Sichere Zahlung mit PayPal, Kauf auf Rechnung, Vorkasse, Kreditkarte</footer></body></html>

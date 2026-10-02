@@ -1,3 +1,33 @@
+// ==UserScript==
+// @name         Bike24 Zahlungsarten-Debugger
+// @namespace    https://github.com/MarkusP97/Bike24
+// @version      2.0.0
+// @description  Zeigt im Bike24-Checkout, welche Zahlungsarten verschwinden – wann, wie und durch welchen Code – und erstellt einen Bericht für den Support. Sendet keine Daten.
+// @match        https://*.bike24.de/*
+// @match        https://*.bike24.com/*
+// @match        https://*.bike24.at/*
+// @match        https://*.bike24.es/*
+// @match        https://*.bike24.fr/*
+// @match        https://*.bike24.it/*
+// @match        https://*.bike24.nl/*
+// @match        https://*.bike24.be/*
+// @match        https://*.bike24.lu/*
+// @match        https://*.bike24.fi/*
+// @match        https://*.bike24.pl/*
+// @match        https://*.bike24.dk/*
+// @match        https://*.bike24.si/*
+// @match        https://*.bike24.ie/*
+// @match        https://*.bike24.ch/*
+// @run-at       document-start
+// @grant        none
+// @noframes
+// @downloadURL  https://raw.githubusercontent.com/MarkusP97/Bike24/HEAD/bike24-payment-debugger.user.js
+// @updateURL    https://raw.githubusercontent.com/MarkusP97/Bike24/HEAD/bike24-payment-debugger.user.js
+// ==/UserScript==
+
+// AUTOMATISCH ERZEUGT aus bike24-payment-debugger.js – bitte dort ändern und
+// "node tools/build-userscript.mjs" ausführen.
+window.B24_AUTO = true;   // Tampermonkey-Modus: still, bis auf der Seite Zahlungsarten auftauchen
 /* ============================================================================
  * Bike24 Zahlungsarten-Debugger  v2.0.0
  * Vanilla JavaScript, keine Abhängigkeiten. Chrome / Edge / Brave / Firefox.

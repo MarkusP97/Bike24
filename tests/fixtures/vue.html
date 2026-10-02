@@ -1,0 +1,21 @@
+<!doctype html><html lang="de"><head><meta charset="utf-8"><title>Checkout-Testseite</title>
+<style>body{font-family:sans-serif} li{padding:6px;list-style:none} .is-hidden{display:none} [data-state=off]{display:none} .d-none{display:none!important}</style></head><body>
+<header>Logos: PayPal Klarna Visa Rechnung</header>
+<div id="app"><p>Gesamtsumme: 412,97 € · 3 Artikel</p>
+<ul><li v-for="m in methods" :key="m.v" v-show="m.v !== 'creditcard' || ccOk" class="pm">
+<label><input type="radio" name="paymentMethod" :value="m.v" v-model="sel"> {{ m.n }}</label></li></ul>
+<p id="sel">Gewählt: {{ sel }}</p></div>
+<script src="/nm/vue/dist/vue.global.prod.js"></script>
+<script>
+Vue.createApp({
+  data: () => ({ all: [{ v: 'paypal', n: 'PayPal' }, { v: 'invoice', n: 'Rechnung' }, { v: 'prepayment', n: 'Vorkasse' }, { v: 'creditcard', n: 'Kreditkarte' }],
+    allowed: ['paypal', 'invoice', 'prepayment', 'creditcard'], ccOk: true, sel: '' }),
+  computed: { methods() { return this.all.filter(m => this.allowed.includes(m.v)); } },
+  mounted() { setTimeout(async () => {
+    const d = await (await fetch('/api/payment-methods')).json();
+    this.allowed = d.paymentMethods.filter(m => m.available || m.code === 'creditcard').map(m => m.code);   // v-if/v-for → entfernt
+    this.ccOk = false;                                                                                        // v-show → display:none
+  }, 500); }
+}).mount('#app');
+</script>
+<footer>Sichere Zahlung mit PayPal, Kauf auf Rechnung, Vorkasse, Kreditkarte</footer></body></html>

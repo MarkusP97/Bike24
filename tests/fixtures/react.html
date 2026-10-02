@@ -1,0 +1,23 @@
+<!doctype html><html lang="de"><head><meta charset="utf-8"><title>Checkout-Testseite</title>
+<style>body{font-family:sans-serif} li{padding:6px;list-style:none} .is-hidden{display:none} [data-state=off]{display:none} .d-none{display:none!important}</style></head><body>
+<header>Logos: PayPal Klarna Visa Rechnung</header>
+<div id="root"></div>
+<script src="/nm/react/umd/react.production.min.js"></script>
+<script src="/nm/react-dom/umd/react-dom.production.min.js"></script>
+<script>
+const e = React.createElement;
+const ALL = [{ v: 'paypal', n: 'PayPal' }, { v: 'invoice', n: 'Rechnung' }, { v: 'prepayment', n: 'Vorkasse' }, { v: 'creditcard', n: 'Kreditkarte' }];
+function Payment() {
+  const [allowed, setAllowed] = React.useState(ALL.map(m => m.v));
+  const [sel, setSel] = React.useState('');
+  React.useEffect(() => { const t = setTimeout(() => fetch('/api/payment-methods').then(r => r.json())
+    .then(d => setAllowed(d.paymentMethods.filter(m => m.available).map(m => m.code))), 500); return () => clearTimeout(t); }, []);
+  return e('div', null, e('p', null, 'Gesamtsumme: 412,97 € · 3 Artikel'),
+    e('ul', { className: 'payment-list' }, ALL.filter(m => allowed.includes(m.v)).map(m =>
+      e('li', { key: m.v, className: 'payment-item' }, e('label', null,
+        e('input', { type: 'radio', name: 'paymentMethod', value: m.v, checked: sel === m.v, onChange: () => setSel(m.v) }), ' ', m.n)))),
+    e('p', { id: 'sel' }, 'Gewählt: ' + sel));
+}
+ReactDOM.createRoot(document.getElementById('root')).render(e(Payment));
+</script>
+<footer>Sichere Zahlung mit PayPal, Kauf auf Rechnung, Vorkasse, Kreditkarte</footer></body></html>

@@ -1,0 +1,12 @@
+{
+  "name": "bike24-payment-debugger-tests",
+  "private": true,
+  "description": "Automatische Browser-Tests für den Bike24 Zahlungsarten-Debugger (Chromium via Playwright)",
+  "scripts": { "test": "node run-tests.cjs" },
+  "devDependencies": {
+    "jquery": "^3.7.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "vue": "^3.5.0"
+  }
+}
