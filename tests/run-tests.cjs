@@ -30,6 +30,17 @@ const API = JSON.stringify({
 function serve() {
   const server = http.createServer((req, res) => {
     const url = new URL(req.url, 'http://x');
+    // Bike24-ähnliche API (Struktur aus echten Nutzer-Berichten)
+    const multi = url.search.includes('multi');
+    if (url.pathname === '/api/checkout/payment-methods') {
+      const all = [{ id: 5, name: 'Rechnung' }, { id: 29, name: 'Kredit-/Debitkarte' }, { id: 100, name: 'Kredit-/ Debitkarte' }, { id: 15, name: 'PayPal' }, { id: 7, name: 'Vorkasse' }];
+      res.writeHead(200, { 'content-type': 'application/json' }); return res.end(JSON.stringify(all.filter(m => !(multi && m.id === 5)).map(m => ({ ...m, description: 'Zahlung per ' + m.name, icons: [] }))));
+    }
+    if (url.pathname === '/api/cart') { res.writeHead(200, { 'content-type': 'application/json' }); return res.end(JSON.stringify(multi ? { items: [{ quantity: 2 }, { quantity: 1 }], totalPrice: 412.97 } : { items: [{ quantity: 1 }], totalPrice: 89.99 })); }
+    if (url.pathname === '/api/v2/user-account') {   // echte Antworten enthalten \u-Escapes – Schwärzung muss damit klarkommen
+      res.writeHead(200, { 'content-type': 'application/json' });
+      return res.end('{"defaultPayment":5,"deliveryAddressList":[{"firstName":"Max","lastName":"Mustermann","street":"Musterstra\\u00dfe 87","houseNumber":"87","postalCode":"90402","city":"N\\u00fcrnberg","phone":"0911 123456"}]}');
+    }
     if (url.pathname === '/api/payment-methods') { res.writeHead(200, { 'content-type': 'application/json' }); return res.end(API); }
     let file; const headers = {};
     if (url.pathname.startsWith('/csp/')) {   // gleiche Testseiten, aber mit strenger Sicherheits-Policy wie bei großen Shops
@@ -365,6 +376,22 @@ const codeTxt = e => (e?.code || []).map(c => `${c.aufruf} @ ${c.wo}`).join(' | 
     const rep = fs.readFileSync(await dl.path(), 'utf8');
     check(T, 'Download über b24PayDbg.report()', rep.includes('Betreff:') && rep.includes('TECHNISCHER ANHANG'));
     check(T, 'Mail nennt betroffene Zahlungsarten', /Betroffene Zahlungsarten: .*Kauf auf Rechnung/.test(rep));
+    await ctx.close();
+  }
+
+  // 23) Bike24-Struktur aus echten Berichten: Server liefert „Rechnung“ nicht mehr → Beweis „Server entscheidet“
+  {
+    const T = 'Bike24-Struktur (aus echten Berichten)';
+    const { data, page, ctx } = await open('bike24like.html', { mode: 'auto' });
+    const e = evOf(data, 'Rechnung').find(x => x.typ === '❌');
+    check(T, 'Rechnung ❌ mit removeChild', e && /removeChild/.test(codeTxt(e)), JSON.stringify(evOf(data, 'Rechnung').map(x => x.typ)));
+    check(T, 'Server-Liste erkannt: Rechnung fehlt darin', e?.serverListe?.enthaeltZahlungsart === false && /payment-methods/.test(e.serverListe.url), JSON.stringify(e?.serverListe));
+    check(T, 'versteckte Legacy-Kreditkarte (id 100) ist kein Fehlalarm', !badOf(data).some(x => x.zahlungsart === 'Kredit-/ Debitkarte'));
+    check(T, 'Warenkorb aus API gelesen (3 Stück, 412.97)', /3 Stück/.test(data.kontext.warenkorbApi) && /412\.97/.test(data.kontext.warenkorbApi), data.kontext.warenkorbApi);
+    const [dl] = await Promise.all([page.waitForEvent('download'), page.evaluate(() => b24PayDbg.report())]);
+    const rep = fs.readFileSync(await dl.path(), 'utf8');
+    check(T, 'Mail nennt „Entscheidung fällt auf dem Server“', /Entscheidung fällt auf dem Server.*Rechnung/.test(rep));
+    check(T, 'Adresse mit \\u-Escapes vollständig geschwärzt', !/u00df|u00fc|rnberg|Muster|90402|"87"/.test(rep), (rep.match(/.{30}(u00df|u00fc|rnberg|Muster|90402).{10}/) || [''])[0]);
     await ctx.close();
   }
 

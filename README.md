@@ -185,7 +185,7 @@ Solche Widgets laufen in einem *iframe* (eine Webseite in der Webseite) einer fr
 |---|---|
 | `bike24-payment-debugger.js` | Hauptskript (für die Konsole), hier wird entwickelt |
 | `bike24-payment-debugger.user.js` | Tampermonkey-Version, **automatisch erzeugt** mit `node tools/build-userscript.mjs` |
-| `tests/` | 22 Testszenarien mit 128 Prüfungen in echtem Chromium (Playwright) |
+| `tests/` | 23 Testszenarien mit 134 Prüfungen in echtem Chromium (Playwright) |
 
 ```bash
 cd tests && npm install && npm test   # braucht Playwright + Chromium (npx playwright install chromium)

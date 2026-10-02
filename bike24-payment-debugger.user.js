@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Bike24 Zahlungsarten-Debugger
 // @namespace    https://github.com/MarkusP97/Bike24
-// @version      2.0.0
+// @version      2.1.0
 // @description  Zeigt im Bike24-Checkout, welche Zahlungsarten verschwinden – wann, wie und durch welchen Code – und erstellt einen Bericht für den Support. Sendet keine Daten.
 // @match        https://*.bike24.de/*
 // @match        https://*.bike24.com/*
@@ -29,7 +29,7 @@
 // "node tools/build-userscript.mjs" ausführen.
 window.B24_AUTO = true;   // Tampermonkey-Modus: still, bis auf der Seite Zahlungsarten auftauchen
 /* ============================================================================
- * Bike24 Zahlungsarten-Debugger  v2.0.0
+ * Bike24 Zahlungsarten-Debugger  v2.1.0
  * Vanilla JavaScript, keine Abhängigkeiten. Chrome / Edge / Brave / Firefox.
  * ----------------------------------------------------------------------------
  * WAS ES MACHT
@@ -79,7 +79,7 @@ window.B24_AUTO = true;   // Tampermonkey-Modus: still, bis auf der Seite Zahlun
     return;
   }
 
-  const VERSION = '2.0.0', LS = 'b24PayDbg.runs', MAX = 300, PANEL_ID = 'b24-dbg-panel', T0 = Date.now();
+  const VERSION = '2.1.0', LS = 'b24PayDbg.runs', MAX = 300, PANEL_ID = 'b24-dbg-panel', T0 = Date.now();
   const state = new Map();                                   // Schlüssel → beobachtete Zahlungsart
   const events = [], muts = [], calls = [], net = [], cssAdds = [], restore = [];
   const owner = new WeakMap(), claimed = new WeakSet(), proxies = new WeakMap(), xhrInfo = new WeakMap();
@@ -220,6 +220,7 @@ window.B24_AUTO = true;   // Tampermonkey-Modus: still, bis auf der Seite Zahlun
       artikel: pick(/(\d+)\s*(?:artikel|positionen|produkte|items?)\b/i, /warenkorb\s*\(\s*(\d+)\s*\)/i),
       land: txt(document.querySelector('select[name*=country i],select[id*=country i],select[name*=land i],select[autocomplete*=country]')?.selectedOptions?.[0]) || '?',
       hinweise: [...new Set((t.match(/[^\n]{0,60}(?:sperrgut|speditions?versand|spedition|vorbestell|nicht verfügbar|nicht möglich|nur bis|höchstbetrag|maximal|mindestbestellwert|bonität|lieferbar (?:in|ab)|nicht auf lager)[^\n]{0,60}/gi) || []).map(s => s.trim()))].slice(0, 6),
+      warenkorbApi: lastCart ? `${lastCart.positionen ?? '?'} Position(en), ${lastCart.stueck || '?'} Stück; ${lastCart.summen.join(', ') || 'keine Summe gefunden'}` : '',
       applePayImBrowser: 'ApplePaySession' in window, paymentRequestImBrowser: 'PaymentRequest' in window, seite: location.pathname
     };
   }
@@ -249,6 +250,8 @@ window.B24_AUTO = true;   // Tampermonkey-Modus: still, bis auf der Seite Zahlun
     const recent = net.filter(x => x.end && x.end <= tRef + 50 && tRef - x.end < 4000);
     const srv = recent.filter(x => x.hit || NETKW.test(x.url));
     const k = getCtx();
+    const list = [...net].reverse().find(x => x.methods && x.end && x.end <= tRef + 50);
+    const inList = list ? list.methods.some(n => norm(n) === norm(o.name)) : null;
     const ev = {
       zeit: clock(), msNachSeitenaufruf: Math.round(tRef), typ: icon, zahlungsart: o.name, was: what, schlimm: bad,
       htmlVorher: o.html, htmlNachher: o.el.isConnected ? snip(o.el) : '(aus der Seite entfernt)',
@@ -256,6 +259,7 @@ window.B24_AUTO = true;   // Tampermonkey-Modus: still, bis auf der Seite Zahlun
       code: c.map(x => ({ aufruf: `${x.op} auf ${x.target}`, wo: culprit(x.err), stack: x.err.stack })),
       css: css.map(x => ({ was: x.text, wo: culprit(x.err), stack: x.err.stack })),
       server: srv.map(x => ({ methode: x.m, url: x.url, status: x.st, fertigMs: Math.round(x.end), auszug: x.hit })),
+      serverListe: list ? { url: list.url, msVorher: Math.round(tRef - list.end), enthaeltZahlungsart: inList, erlaubteZahlungsarten: list.methods } : null,
       weitereRequests: recent.length - srv.length, kontext: k, vermutung: bad ? guess(o.name, k) : ''
     };
     events.push(ev);
@@ -269,6 +273,7 @@ window.B24_AUTO = true;   // Tampermonkey-Modus: still, bis auf der Seite Zahlun
     if (c.length) c.forEach(x => console.log(`🧑‍💻 Ausgelöst von Bike24-Code: ${culprit(x.err) || '(Datei unbekannt)'} → ${x.op}\n   Kompletter Weg dorthin (blaue Links anklickbar):`, x.err));
     else console.log('🧑‍💻 Kein auslösender Code erfasst (z.B. weil das Skript zu spät gestartet wurde). Tipp: README → „Code-Stelle manuell finden“.');
     css.forEach(x => console.log(`🎨 Versteckende CSS-Regel per JavaScript eingefügt: ${x.text}\n   von: ${culprit(x.err)}`, x.err));
+    if (list && inList === false) console.log(`%c🎯 SERVER-ENTSCHEIDUNG: Die Antwort von ${list.m} ${list.url} (${Math.round(tRef - list.end)}ms vorher) enthält „${o.name}“ NICHT mehr.\n   Erlaubt laut Server: ${list.methods.join(', ')}\n   → Das JavaScript zeigt nur an, was der Server erlaubt. Die Regel steckt im Bike24-Backend.`, 'font-weight:bold');
     srv.forEach(x => console.log(`🌐 Server-Antwort ${Math.round(tRef - x.end)}ms vorher: ${x.m} ${x.url} → Status ${x.st}${x.hit ? '\n   Auszug: ' + x.hit : ''}`));
     if (ev.weitereRequests) say(COL.grey, `   (+${ev.weitereRequests} weitere Requests ohne erkennbaren Zahlungsbezug – stehen im Bericht)`);
     console.log('🛒 Warenkorb/Kontext:', k);
@@ -428,6 +433,24 @@ window.B24_AUTO = true;   // Tampermonkey-Modus: still, bis auf der Seite Zahlun
   }
 
   // ── 8) Netzwerk mitschneiden: welche Server-Antwort kam kurz VOR dem Ausblenden? ──
+  let lastCart = null;                                      // zuletzt gesehener Warenkorb aus der Shop-API
+  const norm = n => String(n).toLowerCase().replace(/[\s\\/]+/g, '');
+  function walkJson(o, fn, depth = 0, key = '') { if (depth > 4 || !o || typeof o !== 'object') return; fn(o, key); for (const [k, v] of Object.entries(o)) walkJson(v, fn, depth + 1, k); }
+  function inspectJson(x, body) {   // erkennt Zahlungsarten-Listen und Warenkörbe in Server-Antworten
+    let o; try { o = JSON.parse(body); } catch (e) { return; }
+    walkJson(o, (v) => {
+      if (!x.methods && Array.isArray(v) && v.length && v.every(m => m && typeof m === 'object' && typeof m.name === 'string' && ('id' in m || 'code' in m)) && v.some(m => KW.test(m.name)))
+        x.methods = v.map(m => m.name);
+    });
+    if (/cart|basket|warenkorb/i.test(x.url)) {
+      const c = { summen: [], positionen: null, stueck: 0 };
+      walkJson(o, (v, k) => {
+        for (const [kk, vv] of Object.entries(v)) if (/total|sum|grand|gesamt/i.test(kk) && (typeof vv === 'number' || /^\d+([.,]\d+)?$/.test(vv)) && c.summen.length < 6) c.summen.push(`${kk}=${vv}`);
+        if (Array.isArray(v) && /^(items|positions|products|lines|articles|basketItems|cartItems)$/i.test(k)) { c.positionen = v.length; c.stueck = v.reduce((n, i) => n + (+(i?.quantity ?? i?.qty ?? i?.amount ?? 1) || 0), 0); }
+      });
+      if (c.summen.length || c.positionen != null) lastCart = x.cart = c;
+    }
+  }
   const hitOf = b => { b = String(b || ''); const i = b.search(NETKW); return i < 0 ? '' : cut(b.slice(Math.max(0, i - 120), i + 380).replace(/\s+/g, ' '), 500); };
   const oFetch = window.fetch;
   if (typeof oFetch === 'function') {
@@ -439,7 +462,7 @@ window.B24_AUTO = true;   // Tampermonkey-Modus: still, bis auf der Seite Zahlun
         try {
           x.st = r.status; x.end = now();
           const ct = r.headers.get('content-type') || '';
-          if (/json|text|html|xml/.test(ct) && !/event-stream/.test(ct) && +(r.headers.get('content-length') || 0) < 2e6) r.clone().text().then(b => { x.hit = hitOf(b); }, () => {});
+          if (/json|text|html|xml/.test(ct) && !/event-stream/.test(ct) && +(r.headers.get('content-length') || 0) < 2e6) r.clone().text().then(b => { x.hit = hitOf(b); if (/json/.test(ct)) inspectJson(x, b); }, () => {});
         } catch (e) { /* nie stören */ }
       }, () => { x.st = 'Fehler'; x.end = now(); });
       return p;
@@ -454,7 +477,7 @@ window.B24_AUTO = true;   // Tampermonkey-Modus: still, bis auf der Seite Zahlun
       x.t = now(); keep(net, x);
       xhr.addEventListener('loadend', () => {
         x.st = xhr.status; x.end = now();
-        try { x.hit = hitOf(xhr.responseType === 'json' ? JSON.stringify(xhr.response) : (!xhr.responseType || xhr.responseType === 'text') ? xhr.responseText : ''); } catch (e) { /* egal */ }
+        try { const b = xhr.responseType === 'json' ? JSON.stringify(xhr.response) : (!xhr.responseType || xhr.responseType === 'text') ? xhr.responseText : ''; x.hit = hitOf(b); inspectJson(x, b); } catch (e) { /* egal */ }
       });
     }
     return Reflect.apply(f, xhr, a);
@@ -490,7 +513,7 @@ window.B24_AUTO = true;   // Tampermonkey-Modus: still, bis auf der Seite Zahlun
     .replace(/[\w.+-]+@[\w-]+\.[\w.-]+/g, '[E-Mail entfernt]')
     .replace(/\b[A-Z]{2}\d{2}(?:\s?[A-Z0-9]{4}){3,7}(?:\s?[A-Z0-9]{1,3})?\b/g, '[IBAN entfernt]')
     .replace(/(?:\+|\b00)\d[\d\s/-]{7,}\d/g, '[Telefon entfernt]')
-    .replace(/(\\?"(?:first_?name|last_?name|full_?name|vorname|nachname|street\w*|stra(?:ss|ß)e|address\w*|adresse|zip\w*|plz|post_?code|postal_?code|city|ort|phone\w*|telefon\w*|e_?mail|birth\w*|geburt\w*)\\?"\s*:\s*\\?")[^"\\]*/gi, '$1[entfernt]')
+    .replace(/(\\?"(?:first_?name|last_?name|full_?name|vorname|nachname|street\w*|stra(?:ss|ß)e|house_?number|hausnummer|addition|company|firma|salutation|vat_?number|address\w*|adresse|zip\w*|plz|post_?code|postal_?code|city|ort|phone\w*|telefon\w*|e_?mail|birth\w*|geburt\w*)\\?"\s*:\s*\\?")(?:[^"\\]|\\(?!"))*/gi, '$1[entfernt]')
     .replace(/([?&](?:token|session|sid|auth|key|code|hash|signature)[^=&]*=)[^&"\s]+/gi, '$1[entfernt]');
   function buildReport() {
     const k = ctx(), cmp = compareData();
@@ -503,18 +526,20 @@ window.B24_AUTO = true;   // Tampermonkey-Modus: still, bis auf der Seite Zahlun
     const bad = d.ereignisse.filter(e => e.schlimm), names = [...new Set(bad.map(e => e.zahlungsart))];
     const weg = d.zahlungsarten.filter(z => !z.sichtbar || z.deaktiviert);
     const L = ['Betreff: Zahlungsarten verschwinden im Checkout bei mehreren Artikeln', '', 'Hallo Bike24-Team,', '',
-      'in eurem Checkout verschwinden bei mir einige Zahlungsarten kurz nach dem Laden der Zahlungsseite, sobald mehrere Artikel im Warenkorb liegen. Mit nur einem Artikel sind alle Zahlungsarten verfügbar. Ich habe das mit einem Analyse-Skript im Browser aufgezeichnet:', ''];
+      'in eurem Checkout verschwinden bei mir Zahlungsarten von der Zahlungsseite, sobald mehrere Artikel im Warenkorb liegen. Mit nur einem Artikel sind sie verfügbar. Ich habe das mit einem Analyse-Skript im Browser aufgezeichnet:', ''];
     if (bad.length) {
       L.push(`• Betroffene Zahlungsarten: ${names.join(', ')}`);
       L.push(`• Zeitpunkt: ${bad[0].msNachSeitenaufruf} ms nach Aufruf der Seite (${new Date().toLocaleDateString('de-DE')}, ${bad[0].zeit} Uhr)`);
-      bad.forEach(e => L.push(`• ${e.zahlungsart}: ${e.was}`));
+      [...new Set(bad.map(e => `• ${e.zahlungsart}: ${e.was}`))].forEach(l => L.push(l));
+      const srvDec = bad.find(e => e.serverListe && e.serverListe.enthaeltZahlungsart === false);
+      if (srvDec) L.push(`• Die Entscheidung fällt auf dem Server: Die Antwort von ${srvDec.serverListe.url} enthält „${[...new Set(bad.filter(e => e.serverListe?.enthaeltZahlungsart === false).map(e => e.zahlungsart))].join('“, „')}“ nicht mehr (${srvDec.serverListe.msVorher} ms vor dem Entfernen). Erlaubt waren nur noch: ${srvDec.serverListe.erlaubteZahlungsarten.join(', ')}.`);
       const code = [...new Set(bad.flatMap(e => [...e.code, ...e.css].map(c => c.wo)).filter(Boolean))];
       if (code.length) L.push(`• Ausgelöst durch euren JavaScript-Code: ${code.slice(0, 3).join(' | ')}`);
-      const srv = [...new Map(bad.flatMap(e => e.server).map(s => [s.url, s])).values()];
+      const srv = [...new Map(bad.flatMap(e => e.server).map(s => [s.url, s])).values()].sort((a, b) => /payment/.test(b.url) - /payment/.test(a.url));
       if (srv.length) L.push(`• Server-Antwort kurz davor: ${srv.slice(0, 3).map(s => `${s.methode} ${s.url} (Status ${s.status})`).join(' | ')}`);
     } else if (weg.length) L.push(`• Nicht verfügbar: ${weg.map(z => `${z.name} (${z.grund || 'deaktiviert'})`).join('; ')}`);
     else L.push('• Hinweis: In diesem Lauf wurde kein Ausblenden aufgezeichnet.');
-    L.push(`• Warenkorb laut Seite: Summe ${d.kontext.summe}, Artikel ${d.kontext.artikel}, Lieferland ${d.kontext.land}`);
+    L.push(`• Warenkorb laut Seite: Summe ${d.kontext.summe}, Artikel ${d.kontext.artikel}, Lieferland ${d.kontext.land}${d.kontext.warenkorbApi ? ` (laut Warenkorb-API: ${d.kontext.warenkorbApi})` : ''}`);
     if (d.kontext.hinweise.length) L.push(`• Hinweise auf der Seite: ${d.kontext.hinweise.join(' | ')}`);
     if (d.vergleichOk) L.push('• Vergleich meiner Läufe:', ...d.vergleich.split('\n').map(s => '   ' + s));
     L.push(`• Browser: ${d.browser}`, '',

@@ -1,0 +1,18 @@
+<!doctype html><html lang="de"><head><meta charset="utf-8"><title>Checkout (Bike24-Struktur)</title>
+<style>.payment-methods__method--hidden{display:none}</style></head><body>
+<ul class="payment-methods" id="pm"></ul>
+<script>
+// Nachbau der echten Bike24-Struktur aus den Nutzer-Berichten: Liste kommt von /api/checkout/payment-methods
+const multi = !location.search.includes('single');
+function render(list) {
+  document.getElementById('pm').innerHTML = list.map(m => `<li class="payment-methods__method${m.id === 100 ? ' payment-methods__method--hidden' : ''}" id="payment-method-item-${m.id}">
+    <div class="radio-button" data-testid="pm${m.id}"><label class="radio-button__label" for="r${m.id}">
+    <input class="radio-button__input" id="r${m.id}" name="payment-methods-${m.id}" type="radio" value="${m.id}"><span>${m.name}</span></label></div></li>`).join('');
+}
+async function load(q) { await fetch('/api/v2/user-account'); await fetch('/api/cart' + q); return (await fetch('/api/checkout/payment-methods' + q)).json(); }
+load('?single').then(render).then(() => multi && setTimeout(async function updateQuantity() {
+  const list = await load('?multi');
+  const ul = document.getElementById('pm');
+  [...ul.children].forEach(li => { if (!list.some(m => 'payment-method-item-' + m.id === li.id)) ul.removeChild(li); });  // wie React: fehlende Einträge entfernen
+}, 500));
+</script></body></html>
